@@ -15,7 +15,7 @@ process_fd:
     cmp rax, 1
     jl .ret
 
-    ; TODO special case handling
+    ; TODO flag handling
     ; write(1, buf, rax)
     mov rdi, 1
     mov rsi, buf
@@ -32,8 +32,11 @@ process_fd:
     ret
 
 _start:
+    ; TODO: cmd flag consumer
+
     ; r12 = argc
     mov rbp, rsp
+    mov r13, [rbp]
     mov r12, [rbp]
     cmp r12, 2
     jl .stdin
@@ -44,13 +47,16 @@ _start:
     ; if no more entries; exit
     cmp r12, 2
     jl exit
+    mov r10, [rbp]
+    cmp r10, 1
+    jl .cont
 
     ; arguments starting with "-" are special cases
     mov r11, [rbp]
     mov r11, [r11]
     and r11, 0xff
     cmp r11, 0x2d ;'-'
-    je .special
+    je .stdin
 
     ; open(rbp, 0, 0)
     mov rax, 2
@@ -61,7 +67,7 @@ _start:
 
     ; make sure fd exists
     cmp rax, 1
-    jl .error
+    jl error
     ; print file
     call process_fd
     ; returns input
@@ -71,41 +77,23 @@ _start:
     syscall
 
     ; prepare registers for next loop
+.cont:
     add rbp, 8
     sub r12, 1
     jmp .loop
 
-    ; unreachable. insurance
-    jmp exit
-
-.special:
-    ;special case handler (TODO)
-    ; get second character
-    mov r11, [rbp]
-    add r11, 1
-    mov r10, [r11]
-    and r10, 0xff
-
-    ; just a single -
-    cmp r10, 0x00
-    je .stdin
-
-    jmp .usage
-    ; stdin passthrough
 .stdin:
     mov rax, 0
     call process_fd
-    add rbp, 8
-    sub r12, 1
-    jmp .loop
+    jmp .cont
 
-.usage:
+usage:
     ; TODO: usage message
-    jmp .errorexit
-.error:
+    jmp errorexit
+error:
     ;exit(1)
     ; TODO: process RAX to print meaningful message
-.errorexit:
+errorexit:
     mov rax, 60
     mov rdi, 1
     syscall
