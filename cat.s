@@ -15,6 +15,7 @@ process_fd:
     cmp rax, 1
     jl .ret
 
+    ; TODO special case handling
     ; write(1, buf, rax)
     mov rdi, 1
     mov rsi, buf
@@ -45,8 +46,10 @@ _start:
     jl exit
 
     ; arguments starting with "-" are special cases
-    mov r13, [rbp]
-    cmp r13, 0x2d ;'-'
+    mov r11, [rbp]
+    mov r11, [r11]
+    and r11, 0xff
+    cmp r11, 0x2d ;'-'
     je .special
 
     ; open(rbp, 0, 0)
@@ -77,15 +80,32 @@ _start:
 
 .special:
     ;special case handler (TODO)
+    ; get second character
+    mov r11, [rbp]
+    add r11, 1
+    mov r10, [r11]
+    and r10, 0xff
+
+    ; just a single -
+    cmp r10, 0x00
+    je .stdin
+
+    jmp .usage
     ; stdin passthrough
 .stdin:
     mov rax, 0
     call process_fd
+    add rbp, 8
+    sub r12, 1
     jmp .loop
 
+.usage:
+    ; TODO: usage message
+    jmp .errorexit
 .error:
     ;exit(1)
     ; TODO: process RAX to print meaningful message
+.errorexit:
     mov rax, 60
     mov rdi, 1
     syscall
