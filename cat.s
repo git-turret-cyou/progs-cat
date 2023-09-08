@@ -228,13 +228,6 @@ pstring:
     ret
 
 exit:
-    mov rax, r13
-    mov [reg], rax
-    mov rax, 1
-    mov rdi, 2
-    mov rsi, reg
-    mov rdx, 8
-    syscall
     ;exit(0)
     mov rax, 60
     mov rdi, 0
