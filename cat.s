@@ -32,15 +32,31 @@ process_fd:
     ret
 
 _start:
-    ; TODO: cmd flag consumer
-
     ; r12 = argc
     mov rbp, rsp
-    mov r13, [rbp]
     mov r12, [rbp]
     cmp r12, 2
-    jl .stdin
+    jl final.stdin
 
+.loop:
+    cmp r12, 2
+    jl final
+
+    mov r11, [rbp]
+    mov r11, [r11]
+    and r11, 0xff
+    cmp r11, 0x2d ;'-'
+    jne .cont
+
+.cont:
+    add rbp, 8
+    sub r12, 1
+    jmp .loop
+
+final:
+    ; fix rbp and r12
+    mov rbp, rsp
+    mov r12, [rbp]
     add rbp, 8 * 2 ; jump past 1st arg
 
 .loop:
@@ -104,8 +120,14 @@ exit:
     mov rdi, 0
     syscall
 
-    section .data
-
     section .bss
 bufSize: equ 65536
 buf: resb bufSize
+
+numbernonblankonly:     equ 0b000001
+showends:               equ 0b000010
+numberlines:            equ 0b000100
+squeezeblanks:          equ 0b001000
+showtabs:               equ 0b010000
+shownonprinting:        equ 0b100000
+
