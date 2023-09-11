@@ -19,7 +19,8 @@ process_fd:
     mov r9, buf ; write pointer
     mov r10, buf ; read pointer
 .loop:
-    mov r11, r13 ; flags (for ANDing)
+    ; SHOWENDS
+    mov r11, r13
     and r11, showends
     cmp r11, 1
     jl .skipshowends
@@ -32,14 +33,49 @@ process_fd:
     mov rcx, "$"
     mov [smallbuf], rcx
     mov rax, smallbuf
-    push r8
-    push r9
-    push r10
     call outpstring
-    pop r10
-    pop r9
-    pop r8
 .skipshowends:
+    ; SHOWNONPRINTING
+    mov r11, r13
+    and r11, shownonprinting
+    cmp r11, 1
+    jl .skipnonprinting
+    mov rcx, [r10]
+    and rcx, 0xff
+    cmp rcx, 127
+    jge .showendsm
+    mov rcx, [r10]
+    and rcx, 0xff
+    cmp rcx, 0x20
+    jge .skipnonprinting
+    ; carrot notation
+    cmp rcx, 10
+    je .skipnonprinting
+.showendsm:
+    ; M- notation
+    je .eq127
+    xor rcx, rcx
+    mov rcx, "M-"
+    mov [smallbuf], rcx
+    mov rax, smallbuf
+    call outpstring
+    xor rcx, rcx
+    mov rcx, [r10]
+    and rcx, 0xff
+    sub rcx, 128
+    mov [smallbuf], rcx
+    mov rax, smallbuf
+    call outpstring
+
+    jmp .skipnonprinting
+.eq127:
+    xor rcx, rcx
+    mov rcx, "^?"
+    mov [smallbuf], rcx
+    mov rax, smallbuf
+    call outpstring
+.skipnonprinting:
+
     dec r8
     inc r10
     cmp r8, 0
@@ -52,13 +88,7 @@ process_fd:
     mov rdi, 1
     mov rsi, r9
     mov rax, 1
-    push r8
-    push r9
-    push r10
     syscall
-    pop r10
-    pop r9
-    pop r8
     mov r9, r10
     ret
 
@@ -185,9 +215,22 @@ _start:
 
     ; actual FD processor loop
 final:
-    mov [smallbuf], r13
-    mov rax, smallbuf
-    call pstring
+    ; check for actual arguments
+    mov rbp, rsp
+    mov r12, [rbp]
+    add rbp, 8 * 2
+    xor rdx, rdx
+.loop2:
+    cmp r12, 2
+    jl .cont2
+    add rdx, [rbp]
+    add rbp, 8
+    sub r12, 1
+    jmp .loop2
+
+.cont2:
+    cmp rdx, 1
+    jl .sstdin
     ; fix rbp and r12
     mov rbp, rsp
     mov r12, [rbp]
@@ -234,6 +277,8 @@ final:
     sub r12, 1
     jmp .loop
 
+.sstdin:
+    mov r12, 1
 .stdin:
     mov rax, 0
     call process_fd
@@ -268,6 +313,7 @@ errorexit:
 pstring:
     ; r8 is length
     ; r9 is a cached buffer for operations
+
     xor r8, r8
     mov r9, rax
 .loop:
@@ -287,10 +333,15 @@ pstring:
     mov rdi, 2
     mov rax, 1
     syscall
+
     ret
 
     ; pstring to stdout
+    ; & preserve r8, r9, r10
 outpstring:
+    push r8
+    push r9
+    push r10
     xor r8, r8
     mov r9, rax
 .loop:
@@ -309,6 +360,9 @@ outpstring:
     mov rdi, 1
     mov rax, 1
     syscall
+    pop r10
+    pop r9
+    pop r8
     ret
 
 exit:
