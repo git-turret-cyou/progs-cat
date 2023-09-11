@@ -28,6 +28,7 @@ process_fd:
     cmp rcx, 0x0a
     jne .skipshowends
     call .flushbuf
+    xor rcx, rcx
     mov rcx, "$"
     mov [smallbuf], rcx
     mov rax, smallbuf
@@ -63,6 +64,7 @@ process_fd:
 
 .contrwloop:
     ; continue loop
+    dec r10
     call .flushbuf
     mov rax, rbx
     jmp process_fd
