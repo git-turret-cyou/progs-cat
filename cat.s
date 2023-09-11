@@ -15,17 +15,58 @@ process_fd:
     cmp rax, 1
     jl .ret
 
-    ; TODO flag handling
-    ; write(1, buf, rax)
-    mov rdi, 1
-    mov rsi, buf
-    mov rdx, rax
-    mov rax, 1
-    syscall
+    mov r8, rax ; buf size
+    mov r9, buf ; write pointer
+    mov r10, buf ; read pointer
+.loop:
+    mov r11, r13 ; flags (for ANDing)
+    and r11, showends
+    cmp r11, 1
+    jl .skipshowends
+    mov rcx, [r10]
+    and rcx, 0xff
+    cmp rcx, 0x0a
+    jne .skipshowends
+    call .flushbuf
+    mov rcx, "$"
+    mov [smallbuf], rcx
+    mov rax, smallbuf
+    push r8
+    push r9
+    push r10
+    call outpstring
+    pop r10
+    pop r9
+    pop r8
+.skipshowends:
+    dec r8
+    inc r10
+    cmp r8, 0
+    jl .contrwloop
+    jmp .loop
 
+.flushbuf:
+    mov rdx, r10
+    sub rdx, r9
+    mov rdi, 1
+    mov rsi, r9
+    mov rax, 1
+    push r8
+    push r9
+    push r10
+    syscall
+    pop r10
+    pop r9
+    pop r8
+    mov r9, r10
+    ret
+
+.contrwloop:
     ; continue loop
+    call .flushbuf
     mov rax, rbx
     jmp process_fd
+
 .ret:
     ; return rax
     mov rax, rbx
@@ -34,6 +75,8 @@ process_fd:
 _start:
     ; r12 = argc
     mov rbp, rsp
+    ; r14 = argv0
+    mov r14, [rsp+8]
     mov r12, [rbp]
     cmp r12, 2
     jl final.stdin
@@ -94,6 +137,8 @@ _start:
     je .vt
     cmp r10, "u"
     je .inloop
+    cmp r10, "h"
+    je .help
     jmp usage
 
 .numbernonblankonly:
@@ -127,6 +172,9 @@ _start:
     or r13, shownonprinting
     or r13, showtabs
     jmp .inloop
+.help:
+    or r13, 0xff
+    jmp usage
 
 .cont:
     add rbp, 8
@@ -135,6 +183,9 @@ _start:
 
     ; actual FD processor loop
 final:
+    mov [smallbuf], r13
+    mov rax, smallbuf
+    call pstring
     ; fix rbp and r12
     mov rbp, rsp
     mov r12, [rbp]
@@ -187,8 +238,17 @@ final:
     jmp .cont
 
 usage:
-    ; TODO: usage message
-    mov rax, usagemsg
+    ;usage w/ argv0
+    mov rax, usagep1
+    call pstring
+    mov rax, r14
+    call pstring
+    mov rax, usagep2
+    call pstring
+    cmp r13, 0xff
+    jne errorexit
+    ; r13 is set to 0xff when -h flag is set
+    mov rax, help
     call pstring
     jmp errorexit
 error:
@@ -227,6 +287,28 @@ pstring:
     syscall
     ret
 
+    ; pstring to stdout
+outpstring:
+    xor r8, r8
+    mov r9, rax
+.loop:
+    mov r10, [r9]
+    and r10, 0xff
+    cmp r10, 0x00
+    je .fin
+
+    inc r8
+    inc r9
+    jmp .loop
+
+.fin:
+    mov rdx, r8
+    mov rsi, rax
+    mov rdi, 1
+    mov rax, 1
+    syscall
+    ret
+
 exit:
     ;exit(0)
     mov rax, 60
@@ -234,11 +316,13 @@ exit:
     syscall
 
     section .data
-usagemsg: db "Usage: % [-AbeEnstTuv] [file ...]", 10, 00
+usagep1: db "Usage: ", 00
+usagep2: db " [-h] [-AbeEnstTuv] [file ...]", 10, 00
+help: db "Concatenate FILE(s) to standard output.", 10, 10, "With no FILE, or when FILE is -, read standard input.", 10, 10, "  -A                       equivalent to -vET", 10, "  -b                       number (in hex) nonempty output lines, overrides -n", 10,  "  -e                       equivalent to -vE", 10, "  -E                       display $ at end of each line", 10, "  -n                       number (in hex) all output lines", 10, "  -s                       suppress repeated empty output lines", 10, "  -t                       equivalent to -vT", 10, "  -T                       display TAB characters as ^I", 10, "  -u                       (ignored)", 10, "  -v                       use ^ and M- notation, except for LFD and TAB", 10, "  -h                       display this help and exit", 10, 10, "Examples:", 10, "  cat f - g  Output f's contents, then standard input, then g's contents.", 10, "  cat        Copy standard input to standard output.", 10, 00
 errormsg: db "An error has occured! Unfortunately, this program isnt complex enough to display the error yet. Try using strace!", 10, 00
 
     section .bss
-reg: resb 8
+smallbuf: resb 8
 bufSize: equ 65536
 buf: resb bufSize
 
