@@ -34,6 +34,7 @@ process_fd:
     mov [smallbuf], rcx
     mov rax, smallbuf
     call outpstring
+    jmp .skipnonprinting
 .skipshowends:
     ; SHOWNONPRINTING
     mov r11, r13
@@ -44,25 +45,24 @@ process_fd:
     and rcx, 0xff
     cmp rcx, 127
     jge .showendsm
-    mov rcx, [r10]
-    and rcx, 0xff
     cmp rcx, 0x20
     jge .skipnonprinting
-    ; carrot notation
-    cmp rcx, 10
-    je .skipnonprinting
-.showendsm:
-    ; M- notation
-    je .eq127
-    xor rcx, rcx
-    mov rcx, "M-"
+    ; carrot notation (less than 0x20)
+    or rcx, 0x40
+    ror rcx, 8
+    or rcx, "^"
+    and rcx, 0xffff
     mov [smallbuf], rcx
     mov rax, smallbuf
     call outpstring
-    xor rcx, rcx
-    mov rcx, [r10]
-    and rcx, 0xff
+    jmp .skipnonprinting
+.showendsm:
+    ; M- notation
+    je .eq127
     sub rcx, 128
+    ror rcx, 16
+    or rcx, "M-"
+    and rcx, 0xffffff
     mov [smallbuf], rcx
     mov rax, smallbuf
     call outpstring
