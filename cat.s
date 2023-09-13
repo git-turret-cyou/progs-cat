@@ -23,9 +23,9 @@ process_fd:
     mov r11, r13
     and r11, showends
     cmp r11, 1
-    jl .skipshowends
     mov rcx, [r10]
     and rcx, 0xff
+    jl .skipshowends
     cmp rcx, 0x0a
     jne .skipshowends
     call .flushbuf
@@ -41,33 +41,42 @@ process_fd:
     and r11, shownonprinting
     cmp r11, 1
     jl .skipnonprinting
-    mov rcx, [r10]
-    and rcx, 0xff
+    cmp rcx, 0x0a
+    je .skipnonprinting
+.docaret:
     cmp rcx, 127
     jge .showendsm
     cmp rcx, 0x20
     jge .skipnonprinting
     ; carrot notation (less than 0x20)
-    or rcx, 0x40
+    xor rcx, 0x40
     ror rcx, 8
     or rcx, "^"
     and rcx, 0xffff
     mov [smallbuf], rcx
     mov rax, smallbuf
     call outpstring
+    cmp r9, r10
+    je .skipnonprinting
+    dec r9
+    call .flushbuf
+    inc r10
+    inc r9
+    dec r8
     jmp .skipnonprinting
 .showendsm:
     ; M- notation
     je .eq127
-    sub rcx, 128
-    ror rcx, 16
-    or rcx, "M-"
-    and rcx, 0xffffff
-    mov [smallbuf], rcx
+    xor rdi, rdi
+    or rdi, "M-"
+    and rcx, 0xffff
+    mov [smallbuf], rdi
     mov rax, smallbuf
     call outpstring
-
-    jmp .skipnonprinting
+    mov rcx, [r10]
+    and rcx, 0xff
+    sub rcx, 128
+    jmp .docaret
 .eq127:
     xor rcx, rcx
     mov rcx, "^?"
