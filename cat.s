@@ -58,13 +58,13 @@ process_fd:
     or rcx, "^"
     and rcx, 0xffff
     mov [smallbuf], rcx
-    mov rax, smallbuf
-    call outpstring
     dec r9
     call .flushbuf
     inc r10
     inc r9
     dec r8
+    mov rax, smallbuf
+    call outpstring
     jmp .skipnonprinting
 .showendsm:
     ; M- notation
@@ -81,22 +81,10 @@ process_fd:
     sub rcx, rax
     sub [r10], rax
     jmp .docaret
-.endsmflushandcont:
-    mov [smallbuf], rcx
-    mov rax, smallbuf
-    call outpstring
-    dec r9
-    call .flushbuf
-    inc r10
-    inc r9
-    dec r8
-    jmp .skipnonprinting
 .eq127:
-    xor rcx, rcx
-    mov rcx, "^?"
-    mov [smallbuf], rcx
-    mov rax, smallbuf
-    call outpstring
+    mov rcx, 0x17
+    jmp .docaret
+
 .skipnonprinting:
 
     dec r8
