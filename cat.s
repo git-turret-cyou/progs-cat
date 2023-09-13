@@ -19,12 +19,12 @@ process_fd:
     mov r9, buf ; write pointer
     mov r10, buf ; read pointer
 .loop:
+    mov rcx, [r10]
+    and rcx, 0xff
     ; SHOWENDS
     mov r11, r13
     and r11, showends
     cmp r11, 1
-    mov rcx, [r10]
-    and rcx, 0xff
     jl .skipshowends
     cmp rcx, 0x0a
     jne .skipshowends
@@ -46,18 +46,20 @@ process_fd:
 .docaret:
     cmp rcx, 127
     jge .showendsm
+    ;cmp rcx, [r10]
+    ;jne .endsmflushandcont
     cmp rcx, 0x20
     jge .skipnonprinting
     ; carrot notation (less than 0x20)
-    xor rcx, 0x40
+    cmp r9, r10
+    je .skipnonprinting
+    or rcx, 0x40
     ror rcx, 8
     or rcx, "^"
     and rcx, 0xffff
     mov [smallbuf], rcx
     mov rax, smallbuf
     call outpstring
-    cmp r9, r10
-    je .skipnonprinting
     dec r9
     call .flushbuf
     inc r10
@@ -69,14 +71,24 @@ process_fd:
     je .eq127
     xor rdi, rdi
     or rdi, "M-"
-    and rcx, 0xffff
+    and rdi, 0xffff
     mov [smallbuf], rdi
     mov rax, smallbuf
     call outpstring
     mov rcx, [r10]
     and rcx, 0xff
-    sub rcx, 128
+    sub rcx, rax
     jmp .docaret
+.endsmflushandcont:
+    mov [smallbuf], rcx
+    mov rax, smallbuf
+    call outpstring
+    dec r9
+    call .flushbuf
+    inc r10
+    inc r9
+    dec r8
+    jmp .skipnonprinting
 .eq127:
     xor rcx, rcx
     mov rcx, "^?"
@@ -89,6 +101,7 @@ process_fd:
     inc r10
     cmp r8, 0
     jl .contrwloop
+    call .flushbuf
     jmp .loop
 
 .flushbuf:
