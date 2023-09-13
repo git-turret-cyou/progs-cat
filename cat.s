@@ -77,7 +77,9 @@ process_fd:
     call outpstring
     mov rcx, [r10]
     and rcx, 0xff
+    mov rax, 128
     sub rcx, rax
+    sub [r10], rax
     jmp .docaret
 .endsmflushandcont:
     mov [smallbuf], rcx
