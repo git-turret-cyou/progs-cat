@@ -15,99 +15,11 @@ process_fd:
     cmp rax, 1
     jl .ret
 
-    mov r8, rax ; buf size
-    mov r9, buf ; write pointer
-    mov r10, buf ; read pointer
-.loop:
-    mov rcx, [r10]
-    and rcx, 0xff
-    ; SHOWENDS
-    mov r11, r13
-    and r11, showends
-    cmp r11, 1
-    jl .skipshowends
-    cmp rcx, 0x0a
-    jne .skipshowends
-    call .flushbuf
-    xor rcx, rcx
-    mov rcx, "$"
-    mov [smallbuf], rcx
-    mov rax, smallbuf
-    call outpstring
-    jmp .skipnonprinting
-.skipshowends:
-    ; SHOWNONPRINTING
-    mov r11, r13
-    and r11, shownonprinting
-    cmp r11, 1
-    jl .skipnonprinting
-    cmp rcx, 0x0a
-    je .skipnonprinting
-.docaret:
-    cmp rcx, 127
-    jge .showendsm
-    ;cmp rcx, [r10]
-    ;jne .endsmflushandcont
-    cmp rcx, 0x20
-    jge .skipnonprinting
-    ; carrot notation (less than 0x20)
-    cmp r9, r10
-    je .skipnonprinting
-    or rcx, 0x40
-    ror rcx, 8
-    or rcx, "^"
-    and rcx, 0xffff
-    mov [smallbuf], rcx
-    dec r9
-    call .flushbuf
-    inc r10
-    inc r9
-    dec r8
-    mov rax, smallbuf
-    call outpstring
-    jmp .skipnonprinting
-.showendsm:
-    ; M- notation
-    je .eq127
-    xor rdi, rdi
-    or rdi, "M-"
-    and rdi, 0xffff
-    mov [smallbuf], rdi
-    mov rax, smallbuf
-    call outpstring
-    mov rcx, [r10]
-    and rcx, 0xff
-    mov rax, 128
-    sub rcx, rax
-    sub [r10], rax
-    jmp .docaret
-.eq127:
-    mov rcx, 0x17
-    jmp .docaret
-
-.skipnonprinting:
-
-    dec r8
-    inc r10
-    cmp r8, 0
-    jl .contrwloop
-    call .flushbuf
-    jmp .loop
-
-.flushbuf:
-    mov rdx, r10
-    sub rdx, r9
-    mov rdi, 1
-    mov rsi, r9
+    mov rdx, rax
     mov rax, 1
+    mov rdi, 1
+    mov rsi, buf
     syscall
-    mov r9, r10
-    ret
-
-.contrwloop:
-    ; continue loop
-    dec r10
-    call .flushbuf
     mov rax, rbx
     jmp process_fd
 
@@ -161,63 +73,8 @@ _start:
     je .cont
 
     ; basically switch() { case }
-    cmp r10, "b"
-    je .numbernonblankonly
-    cmp r10, "E"
-    je .showends
-    cmp r10, "n"
-    je .numberlines
-    cmp r10, "s"
-    je .squeezeblanks
-    cmp r10, "T"
-    je .showtabs
-    cmp r10, "v"
-    je .shownonprinting
-    cmp r10, "A"
-    je .showall
-    cmp r10, "e"
-    je .ve
-    cmp r10, "t"
-    je .vt
     cmp r10, "u"
     je .inloop
-    cmp r10, "h"
-    je .help
-    jmp usage
-
-.numbernonblankonly:
-    or r13, numbernonblankonly
-    jmp .inloop
-.showends:
-    or r13, showends
-    jmp .inloop
-.numberlines:
-    or r13, numberlines
-    jmp .inloop
-.squeezeblanks:
-    or r13, squeezeblanks
-    jmp .inloop
-.showtabs:
-    or r13, showtabs
-    jmp .inloop
-.shownonprinting:
-    or r13, shownonprinting
-    jmp .inloop
-.showall:
-    or r13, shownonprinting
-    or r13, showends
-    or r13, showtabs
-    jmp .inloop
-.ve:
-    or r13, shownonprinting
-    or r13, showends
-    jmp .inloop
-.vt:
-    or r13, shownonprinting
-    or r13, showtabs
-    jmp .inloop
-.help:
-    or r13, 0xff
     jmp usage
 
 .cont:
@@ -304,11 +161,6 @@ usage:
     call pstring
     mov rax, usagep2
     call pstring
-    cmp r13, 0xff
-    jne errorexit
-    ; r13 is set to 0xff when -h flag is set
-    mov rax, help
-    call pstring
     jmp errorexit
 error:
     ;exit(1)
@@ -348,35 +200,6 @@ pstring:
 
     ret
 
-    ; pstring to stdout
-    ; & preserve r8, r9, r10
-outpstring:
-    push r8
-    push r9
-    push r10
-    xor r8, r8
-    mov r9, rax
-.loop:
-    mov r10, [r9]
-    and r10, 0xff
-    cmp r10, 0x00
-    je .fin
-
-    inc r8
-    inc r9
-    jmp .loop
-
-.fin:
-    mov rdx, r8
-    mov rsi, rax
-    mov rdi, 1
-    mov rax, 1
-    syscall
-    pop r10
-    pop r9
-    pop r8
-    ret
-
 exit:
     ;exit(0)
     mov rax, 60
@@ -385,21 +208,10 @@ exit:
 
     section .data
 usagep1: db "Usage: ", 00
-usagep2: db " [-h] [-AbeEnstTuv] [file ...]", 10, 00
-help: db "Concatenate FILE(s) to standard output.", 10, 10, "With no FILE, or when FILE is -, read standard input.", 10, 10, "  -A                       equivalent to -vET", 10, "  -b                       number (in hex) nonempty output lines, overrides -n", 10,  "  -e                       equivalent to -vE", 10, "  -E                       display $ at end of each line", 10, "  -n                       number (in hex) all output lines", 10, "  -s                       suppress repeated empty output lines", 10, "  -t                       equivalent to -vT", 10, "  -T                       display TAB characters as ^I", 10, "  -u                       (ignored)", 10, "  -v                       use ^ and M- notation, except for LFD and TAB", 10, "  -h                       display this help and exit", 10, 10, "Examples:", 10, "  cat f - g  Output f's contents, then standard input, then g's contents.", 10, "  cat        Copy standard input to standard output.", 10, 00
+usagep2: db " [-u] [file ...]", 10, 00
 errormsg: db "An error has occured! Unfortunately, this program isnt complex enough to display the error yet. Try using strace!", 10, 00
 
     section .bss
 smallbuf: resb 8
 bufSize: equ 65536
 buf: resb bufSize
-
-numbernonblankonly:     equ 0b000001 ; -b
-showends:               equ 0b000010 ; -E
-numberlines:            equ 0b000100 ; -n
-squeezeblanks:          equ 0b001000 ; -s
-showtabs:               equ 0b010000 ; -T
-shownonprinting:        equ 0b100000 ; -v
-; -A = -vET
-; -e = -vE
-; -t = -vT
